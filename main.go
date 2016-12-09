@@ -73,7 +73,8 @@ func readFeed(profileID, token string) int {
 	url := fmt.Sprintf("/%s/feed", profileID)
 	res, err := session.Get(url, facebook.Params{
 		"access_token": token,
-		"since": "1481155200",
+		"since": "1481155200", 	// 2016-12-08
+		"until": "1481846400",	// 2016-12-16
 		"limit": "100",
 	})
 
