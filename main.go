@@ -10,9 +10,12 @@ import (
 	"strconv"
 
 	"github.com/huandu/facebook"
+	"gopkg.in/mgo.v2"
+	_ "gopkg.in/mgo.v2/bson"
 )
 
 type entry struct {
+	ID string `bson:"_id"`
 	District string
 	Constituency string
 	CPP int
@@ -32,7 +35,10 @@ var (
 	appSecret = "<app_secret>"
 	profileID = "310028155725467" // Electoral Commission Ghana Page
 	pattern = "Presidential Provisional Results"
+	mongohost = "localhost"
+
 	session *facebook.Session
+	collection *mgo.Collection
 )
 
 func main() {
@@ -40,8 +46,18 @@ func main() {
 
 	fb := facebook.New(appID, appSecret)
 	token := fb.AppAccessToken()
-
 	session = fb.Session(token)
+
+	dbsession, err := mgo.Dial(mongohost)
+        if err != nil {
+                panic(err)
+        }
+        defer dbsession.Close()
+
+        // Optional. Switch the session to a monotonic behavior.
+        dbsession.SetMode(mgo.Monotonic, true)
+	collection = dbsession.DB("ecresults").C("results")
+
 	n := readFeed(profileID, token)
 
 	log.Print("Got ", n, " declarations.")
@@ -68,13 +84,16 @@ func readFeed(profileID, token string) int {
 	paging, _ := res.Paging(session)
 	items := paging.Data()
 
+	row := &entry{}
+
 	for ;; {
 		items = paging.Data()
 		for _, item := range items {
 			msg := fmt.Sprintf("%s",item["message"])
+			row.ID = fmt.Sprintf("%s", item["id"])
 			match, _ := regexp.MatchString(pattern, msg)
 			if match {
-				getData(msg)
+				getData(msg, row)
 				count++
 			}
 		}
@@ -89,8 +108,7 @@ func readFeed(profileID, token string) int {
 	return count
 }
 
-func getData(msg string) {
-	row := &entry{}
+func getData(msg string, row *entry) {
 
 	const line = `{{.District}},{{.Constituency}},{{.CPP}},{{.NDP}},{{.NDC}},{{.PPP}},{{.NPP}},{{.PNC}},{{.IND}},{{.Total}},{{.Rejected}},{{.InBox}}
 `
@@ -144,7 +162,13 @@ func getData(msg string) {
 	match = re.FindStringSubmatch(msg)
 	row.InBox, _ = strconv.Atoi(strings.Replace(match[1], ",", "", -1))
 
-	err := tmpl.Execute(os.Stdout, row)
+	_, err := collection.UpsertId(row.ID, row)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// output as CSV to stdout
+	err = tmpl.Execute(os.Stdout, row)
 	if err != nil {
 		log.Fatal(err)
 	}
