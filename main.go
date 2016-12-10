@@ -11,7 +11,6 @@ import (
 
 	"github.com/huandu/facebook"
 	"gopkg.in/mgo.v2"
-	_ "gopkg.in/mgo.v2/bson"
 )
 
 type entry struct {
@@ -31,8 +30,8 @@ type entry struct {
 }
 
 var (
-	appID = "<app_id>"
-	appSecret = "<app_secret>"
+	appID = os.Getenv("APPID")
+	appSecret = os.Getenv("APPSECRET")
 	profileID = "310028155725467" // Electoral Commission Ghana Page
 	pattern = "Presidential Provisional Results"
 	mongohost = "localhost"
